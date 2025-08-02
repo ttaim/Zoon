@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>لوحة تحكم المدير</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f0f0f0; }
+    h1 { text-align: center; }
+    .form { background: #fff; padding: 20px; border-radius: 10px; max-width: 500px; margin: auto; box-shadow: 0 0 10px #ccc; }
+    input, textarea, select, button { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; }
+    .products { max-width: 700px; margin: 30px auto; }
+    .product { background: #fff; border-radius: 10px; margin-bottom: 15px; padding: 15px; box-shadow: 0 0 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .product img { height: 80px; border-radius: 8px; margin-left: 10px; object-fit: cover; width: 100px; }
+    .product-info { flex-grow: 1; }
+    .delete-btn, .edit-btn { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 8px; cursor: pointer; margin-left: 5px; }
+    .edit-btn { background: #007bff; }
+  </style>
+</head>
+<body>
+  <h1>إدارة المنتجات</h1>
+  <div class="form">
+    <input type="text" id="name" placeholder="اسم المنتج" required />
+    <input type="number" id="price" placeholder="السعر" required min="0" />
+    <input type="text" id="imageLink" placeholder="رابط الصورة (اختياري)" />
+    <input type="file" id="imageFile" accept="image/*" />
+    <textarea id="info" placeholder="معلومات المنتج" required></textarea>
+    <select id="availability">
+      <option value="متوفر">متوفر</option>
+      <option value="غير متوفر">غير متوفر / نفد الكمية</option>
+    </select>
+    <button onclick="addOrUpdateProduct()">حفظ المنتج</button>
+  </div>
+
+  <div class="products" id="productList"></div>
+
+  <script>
+    let editId = null;
+
+    async function fetchProducts() {
+      const response = await fetch('/api/products');
+      return await response.json();
+    }
+
+    async function addOrUpdateProduct() {
+      const name = document.getElementById('name').value.trim();
+      const price = parseFloat(document.getElementById('price').value.trim());
+      const imageLink = document.getElementById('imageLink').value.trim();
+      const imageFile = document.getElementById('imageFile').files[0];
+      const info = document.getElementById('info').value.trim();
+      const availability = document.getElementById('availability').value;
+
+      if (!name || isNaN(price) || price < 0 || (!imageLink && !imageFile) || !info) {
+        alert("يرجى تعبئة جميع الحقول المطلوبة بشكل صحيح");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function() {
+        const image = imageLink || reader.result;
+        const product = { name, price, image, info, availability };
+
+        try {
+          if (editId !== null) {
+            await fetch(`/api/products/${editId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(product)
+            });
+            editId = null;
+          } else {
+            await fetch('/api/products', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(product)
+            });
+          }
+          
+          renderProducts();
+          resetForm();
+          alert("تم حفظ المنتج بنجاح!");
+        } catch (error) {
+          console.error('Error:', error);
+          alert("حدث خطأ أثناء حفظ المنتج");
+        }
+      };
+
+      if (imageFile) {
+        reader.readAsDataURL(imageFile);
+      } else {
+        reader.onload();
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
+      
+      try {
+        await fetch(`/api/products/${id}`, {
+          method: 'DELETE'
+        });
+        renderProducts();
+      } catch (error) {
+        console.error('Error:', error);
+        alert("حدث خطأ أثناء حذف المنتج");
+      }
+    }
+
+    async function editProduct(id) {
+      const products = await fetchProducts();
+      const product = products.find(p => p.id === id);
+      
+      document.getElementById('name').value = product.name;
+      document.getElementById('price').value = product.price;
+      document.getElementById('imageLink').value = product.image.startsWith("data:") ? '' : product.image;
+      document.getElementById('imageFile').value = '';
+      document.getElementById('info').value = product.info;
+      document.getElementById('availability').value = product.availability;
+      editId = id;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function renderProducts() {
+      const products = await fetchProducts();
+      const container = document.getElementById('productList');
+      container.innerHTML = '';
+      
+      if (products.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#555;">لا يوجد منتجات حتى الآن.</p>';
+        return;
+      }
+      
+      products.forEach(product => {
+        container.innerHTML += `
+          <div class="product">
+            <img src="${product.image}" alt="صورة المنتج" />
+            <div class="product-info">
+              <strong>${product.name}</strong><br />
+              السعر: ${product.price} ريال<br />
+              <small>${product.info}</small><br />
+              <strong style="color:${product.availability === 'متوفر' ? 'green' : 'red'}">${product.availability}</strong>
+            </div>
+            <div>
+              <button class="edit-btn" onclick="editProduct(${product.id})">تعديل</button>
+              <button class="delete-btn" onclick="deleteProduct(${product.id})">حذف</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function resetForm() {
+      document.getElementById('name').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('imageLink').value = '';
+      document.getElementById('imageFile').value = '';
+      document.getElementById('info').value = '';
+      document.getElementById('availability').value = 'متوفر';
+      editId = null;
+    }
+
+    renderProducts();
+  </script>
+</body>
+</html>

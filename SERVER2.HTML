@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>لوحة تحكم المدير</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f0f0f0; }
+    h1 { text-align: center; }
+    .form { background: #fff; padding: 20px; border-radius: 10px; max-width: 500px; margin: auto; box-shadow: 0 0 10px #ccc; }
+    input, textarea, select, button { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; }
+    .products { max-width: 700px; margin: 30px auto; }
+    .product { background: #fff; border-radius: 10px; margin-bottom: 15px; padding: 15px; box-shadow: 0 0 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .product img { height: 80px; border-radius: 8px; margin-left: 10px; object-fit: cover; width: 100px; }
+    .product-info { flex-grow: 1; }
+    .delete-btn, .edit-btn { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 8px; cursor: pointer; margin-left: 5px; }
+    .edit-btn { background: #007bff; }
+  </style>
+</head>
+<body>
+  <h1>إدارة المنتجات</h1>
+  <div class="form">
+    <input type="text" id="name" placeholder="اسم المنتج" required />
+    <input type="number" id="price" placeholder="السعر" required min="0" />
+    <input type="text" id="imageLink" placeholder="رابط الصورة (اختياري)" />
+    <input type="file" id="imageFile" accept="image/*" />
+    <textarea id="info" placeholder="معلومات المنتج" required></textarea>
+    <select id="availability">
+      <option value="متوفر">متوفر</option>
+      <option value="غير متوفر">غير متوفر / نفد الكمية</option>
+    </select>
+    <button onclick="addOrUpdateProduct()">حفظ المنتج</button>
+  </div>
+
+  <div class="products" id="productList"></div>
+
+  <script>
+    let editIndex = null;
+
+    function getProducts() {
+      return JSON.parse(localStorage.getItem('products') || '[]');
+    }
+
+    function saveProducts(products) {
+      localStorage.setItem('products', JSON.stringify(products));
+    }
+
+    function addOrUpdateProduct() {
+      const name = document.getElementById('name').value.trim();
+      const price = parseFloat(document.getElementById('price').value.trim());
+      const imageLink = document.getElementById('imageLink').value.trim();
+      const imageFile = document.getElementById('imageFile').files[0];
+      const info = document.getElementById('info').value.trim();
+      const availability = document.getElementById('availability').value;
+
+      if (!name || isNaN(price) || price < 0 || (!imageLink && !imageFile) || !info) {
+        alert("يرجى تعبئة جميع الحقول المطلوبة بشكل صحيح");
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function () {
+        const image = imageLink || reader.result;
+
+        const product = { name, price, image, info, availability };
+
+        const products = getProducts();
+        if (editIndex !== null) {
+          products[editIndex] = product;
+          editIndex = null;
+        } else {
+          products.push(product);
+        }
+        saveProducts(products);
+        renderProducts();
+        resetForm();
+        alert("تم حفظ المنتج بنجاح! يمكنك الآن رؤية المنتج في الصفحة الرئيسية.");
+      };
+
+      if (imageFile) {
+        reader.readAsDataURL(imageFile);
+      } else {
+        reader.onload();
+      }
+    }
+
+    function deleteProduct(index) {
+      if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
+      const products = getProducts();
+      products.splice(index, 1);
+      saveProducts(products);
+      renderProducts();
+    }
+
+    function editProduct(index) {
+      const p = getProducts()[index];
+      document.getElementById('name').value = p.name;
+      document.getElementById('price').value = p.price;
+      document.getElementById('imageLink').value = p.image.startsWith("data:") ? '' : p.image;
+      document.getElementById('imageFile').value = '';
+      document.getElementById('info').value = p.info;
+      document.getElementById('availability').value = p.availability;
+      editIndex = index;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderProducts() {
+      const products = getProducts();
+      const container = document.getElementById('productList');
+      container.innerHTML = '';
+      if (products.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#555;">لا يوجد منتجات حتى الآن.</p>';
+        return;
+      }
+      products.forEach((p, i) => {
+        container.innerHTML += `
+          <div class="product">
+            <img src="${p.image}" alt="صورة المنتج" />
+            <div class="product-info">
+              <strong>${p.name}</strong><br />
+              السعر: ${p.price} ريال<br />
+              <small>${p.info}</small><br />
+              <strong style="color:${p.availability === 'متوفر' ? 'green' : 'red'}">${p.availability}</strong>
+            </div>
+            <div>
+              <button class="edit-btn" onclick="editProduct(${i})">تعديل</button>
+              <button class="delete-btn" onclick="deleteProduct(${i})">حذف</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function resetForm() {
+      document.getElementById('name').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('imageLink').value = '';
+      document.getElementById('imageFile').value = '';
+      document.getElementById('info').value = '';
+      document.getElementById('availability').value = 'متوفر';
+      editIndex = null;
+    }
+
+    renderProducts();
+  </script>
+</body>
+</html>
